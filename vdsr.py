@@ -1,15 +1,12 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
-import keras
+import tensorflow as tf
+
 from keras import backend as K
 from keras.models import Sequential, Model
 from keras.layers import Dense, Activation
-from keras.layers import Conv2D, MaxPooling2D, Input, Merge, ZeroPadding2D, merge, add
-import tensorflow as tf
-from keras.models import load_model
-from keras import optimizers
-from keras import losses
+from keras.layers import Conv2D, MaxPooling2D, Input, ZeroPadding2D, merge, add
 from keras.optimizers import SGD, Adam
 from keras.callbacks import ModelCheckpoint
 
@@ -20,32 +17,34 @@ import numpy as np
 import re
 import math
 
-DATA_PATH = "./data/train/"
 IMG_SIZE = (41, 41, 1)
 BATCH_SIZE = 64
 EPOCHS = 100
 TRAIN_SCALES = [2, 3, 4]
 VALID_SCALES = [4]
 
+
 def tf_log10(x):
-  numerator = tf.log(x)
-  denominator = tf.log(tf.constant(10, dtype=numerator.dtype))
-  return numerator / denominator
+	numerator = tf.math.log(x)
+	denominator = tf.math.log(tf.constant(10, dtype=numerator.dtype))
+	return numerator / denominator
+
 
 def load_images(directory):
 	images = []
 	for root, dirnames, filenames in os.walk(directory):
-	    for filename in filenames:
-	        if re.search("\.(jpg|jpeg|png|bmp|tiff)$", filename):
-	            filepath = os.path.join(root, filename)
-	            image = ndimage.imread(filepath, mode="L")
-	            images.append(image)
-	            
+		for filename in filenames:
+			if re.search("\.(jpg|jpeg|png|bmp|tiff)$", filename):
+				filepath = os.path.join(root, filename)
+				image = ndimage.imread(filepath, mode="L")
+				images.append(image)
+
 	images = np.array(images)
 	array_shape = np.append(images.shape[0:3], 1)
 	images = np.reshape(images, (array_shape))
 
 	return images
+
 
 def get_image_list(data_path, scales=[2, 3, 4]):
 	l = glob.glob(os.path.join(data_path,"*"))
@@ -60,6 +59,7 @@ def get_image_list(data_path, scales=[2, 3, 4]):
 				string_scale = "_" + str(scale) + ".mat"
 				if os.path.exists(f[:-4]+string_scale): train_list.append([f, f[:-4]+string_scale])
 	return train_list
+
 
 def get_image_batch(train_list, offset):
 	target_list = train_list[offset:offset+BATCH_SIZE]
@@ -77,6 +77,7 @@ def get_image_batch(train_list, offset):
 	gt_list.resize([BATCH_SIZE, IMG_SIZE[0], IMG_SIZE[1], 1])
 	return input_list, gt_list
 
+
 class threadsafe_iter:
     """Takes an iterator/generator and makes it thread-safe by
     serializing call to the `next` method of given iterator/generator.
@@ -88,9 +89,9 @@ class threadsafe_iter:
     def __iter__(self):
         return self
 
-    def next(self):
+    def __next__(self):
         with self.lock:
-            return self.it.next()
+            return self.it.__next__()
 
 
 def threadsafe_generator(f):
@@ -99,6 +100,7 @@ def threadsafe_generator(f):
     def g(*a, **kw):
         return threadsafe_iter(f(*a, **kw))
     return g
+
 
 @threadsafe_generator
 def image_gen(target_list):
@@ -179,12 +181,12 @@ model.compile(adam, loss='mse', metrics=[PSNR, "accuracy"])
 
 model.summary()
 
-filepath="./checkpoints/weights-improvement-{epoch:02d}-{PSNR:.2f}.hdf5"
+filepath = "./checkpoints/weights-improvement-{epoch:02d}-{PSNR:.2f}.hdf5"
 checkpoint = ModelCheckpoint(filepath, monitor=PSNR, verbose=1, mode='max')
 callbacks_list = [checkpoint]
 
-model.fit_generator(image_gen(train_list), steps_per_epoch=len(train_list) // BATCH_SIZE,  \
-					validation_data=image_gen(test_list), validation_steps=len(train_list) // BATCH_SIZE, \
+model.fit_generator(image_gen(train_list), validation_steps=len(train_list) // BATCH_SIZE,
+					steps_per_epoch=len(train_list) // BATCH_SIZE, validation_data=image_gen(test_list),
 					epochs=EPOCHS, workers=8, callbacks=callbacks_list)
 
 print("Done training!!!")
